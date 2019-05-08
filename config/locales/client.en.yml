@@ -359,6 +359,10 @@ en:
         placeholder: "type the message title here"
 
     review:
+      claim:
+        title: "claim this topic"
+      unclaim:
+        help: "remove this claim"
       awaiting_approval: "Awaiting Approval"
       delete: "Delete"
       settings:

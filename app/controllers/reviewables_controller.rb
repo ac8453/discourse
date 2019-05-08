@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class ReviewablesController < ApplicationController
   requires_login
 
@@ -30,12 +32,20 @@ class ReviewablesController < ApplicationController
     total_rows = Reviewable.list_for(current_user, filters).count
     reviewables = Reviewable.list_for(current_user, filters.merge(limit: PER_PAGE, offset: offset)).to_a
 
+    claimed_topics = ReviewableClaimedTopic.claimed_hash(reviewables.map { |r| r.topic_id }.uniq)
+
     # This is a bit awkward, but ActiveModel serializers doesn't seem to serialize STI. Note `hash`
     # is mutated by the serializer and contains the side loaded records which must be merged in the end.
     hash = {}
     json = {
       reviewables: reviewables.map! do |r|
-        result = r.serializer.new(r, root: nil, hash: hash, scope: guardian).as_json
+        result = r.serializer.new(
+          r,
+          root: nil,
+          hash: hash,
+          scope: guardian,
+          claimed_topics: claimed_topics
+        ).as_json
         hash[:bundled_actions].uniq!
         (hash['actions'] || []).uniq!
         result
@@ -78,7 +88,17 @@ class ReviewablesController < ApplicationController
     end
 
     topics = Topic.where(id: topic_ids).order('reviewable_score DESC')
-    render_serialized(topics, ReviewableTopicSerializer, root: 'reviewable_topics', stats: stats)
+    render_serialized(
+      topics,
+      ReviewableTopicSerializer,
+      root: 'reviewable_topics',
+      stats: stats,
+      claimed_topics: ReviewableClaimedTopic.claimed_hash(topic_ids),
+      rest_serializer: true,
+      meta: {
+        types: meta_types
+      }
+    )
   end
 
   def show
@@ -189,7 +209,8 @@ protected
     {
       created_by: 'user',
       target_created_by: 'user',
-      reviewed_by: 'user'
+      reviewed_by: 'user',
+      claimed_by: 'user'
     }
   end
 
